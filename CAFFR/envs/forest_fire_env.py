@@ -13,8 +13,6 @@ directory = os.path.dirname(os.path.realpath(__file__))
 import sys
 sys.path.insert(1, directory)
 
-
-
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding

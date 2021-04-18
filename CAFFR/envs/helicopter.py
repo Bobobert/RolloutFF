@@ -75,7 +75,7 @@ class Helicopter(ForestFire):
             else self.pos_col + 1 if movement in [3,6,9]\
             else self.pos_col
         b = (self.pos_row, self.pos_col)
-        if not a == b:
+        if a != b:
             self.last_move = True
         else:
             self.last_move = False
@@ -442,7 +442,7 @@ class EnvMakerForestFire(Helicopter):
     total_reward = 0.0
     steps = 0   
     # Defaults
-    def_steps_to_termination = 128
+    def_steps_to_termination = 480
     def_fire_threshold = 1024
     # Default weights set to a minimization of the reward function. RWH
     def __init__(self, env_mode = 'stochastic',
@@ -560,10 +560,11 @@ class EnvMakerForestFire(Helicopter):
             'n_row': self.n_row, 'n_col': self.n_col, 'p_tree': self.p_tree, 'p_fire': self.p_fire, 'custom_grid': self.custom_grid,
             'init_pos_row': self.init_pos_row, 'init_pos_col': self.init_pos_col, 'moves_before_updating': self.moves_before_updating,
             'termination_type': self.termination_type, 'steps_to_termination': self.steps_to_termination, 'fire_threshold': self.fire_threshold,
-            'reward_type': self.reward_type, 'reward_tree': self.reward_tree, 'reward_fire': self.reward_fire, 'reward_empty': self.reward_empty, 'reward_hit': self.reward_hit,
+            'reward_type': self.reward_type, 'reward_tree': self.reward_tree, 'reward_fire': self.reward_fire, 'reward_empty': self.reward_empty, 
+            'reward_hit': self.reward_hit, "reward_move":self.reward_move,
             'tree': self.tree, 'empty': self.empty, 'fire': self.fire, 'rock': self.rock, 'lake': self.lake, 'observation_mode': self.observation_mode,
             'sub_tree': self.sub_tree, 'sub_empty': self.sub_empty, 'sub_fire': self.sub_fire, 'sub_rock': self.sub_rock, 'sub_lake': self.sub_lake,
-            'ip_tree': self.ip_tree, 'ip_empty': self.ip_empty, 'ip_fire': self.ip_fire, 'ip_rock': self.ip_rock, 'ip_lake': self.ip_lake
+            'ip_tree': self.ip_tree, 'ip_empty': self.ip_empty, 'ip_fire': self.ip_fire, 'ip_rock': self.ip_rock, 'ip_lake': self.ip_lake, 
             }
 
         # Rerun object method init
@@ -703,7 +704,7 @@ class EnvMakerForestFire(Helicopter):
         elif self.reward_type == 'ratio':
             if self.remaining_moves == self.moves_before_updating:
                 tot = self.grid.shape[0] * self.grid.shape[1]
-                reward = 1.8 * self.cell_counts[self.tree] / tot - 0.9#v1 17/04
+                reward += 1.8 * self.cell_counts[self.tree] / tot - 0.9#v1 17/04
             reward += self.reward_move if self.last_move else 0.0
             """ratio = 0.0 # v0
             if self.cell_counts[self.fire] > 0:
@@ -768,7 +769,7 @@ class EnvMakerForestFire(Helicopter):
             init_pos_row=self.pos_row,init_pos_col=self.pos_col,n_row = self.n_row, 
             n_col = self.n_col,p_tree = self.p_tree, p_fire =self.p_fire,
                  moves_before_updating = self.moves_before_updating,
-                 reward_type = self.reward_type, reward_tree = self.reward_tree,
+                 reward_type = self.reward_type, reward_tree = self.reward_tree, reward_move= self.reward_move,
                  reward_fire = self.reward_fire, reward_empty =self.reward_empty, reward_hit = self.reward_hit,
                  sub_tree = self.sub_tree, sub_empty = self.sub_empty, sub_fire = self.sub_fire, 
                  sub_rock = self.sub_rock, sub_lake = self.sub_lake,ip_tree = self.ip_tree,
