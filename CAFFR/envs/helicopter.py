@@ -704,7 +704,7 @@ class EnvMakerForestFire(Helicopter):
             if self.remaining_moves == self.moves_before_updating:
                 tot = self.grid.shape[0] * self.grid.shape[1]
                 reward = 1.8 * self.cell_counts[self.tree] / tot - 0.9#v1 17/04
-                reward += self.reward_move if self.last_move else 0.0
+            reward += self.reward_move if self.last_move else 0.0
             """ratio = 0.0 # v0
             if self.cell_counts[self.fire] > 0:
                 ratio = self.cell_counts[self.tree] / self.cell_counts[self.fire]

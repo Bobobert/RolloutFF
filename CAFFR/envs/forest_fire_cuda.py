@@ -154,7 +154,7 @@ def helicopter_step(grid,
         if steps_before_update == 0:
             rr = parameters[8]*parameters[9]*1.0
             cost += 1.9 * trees / rr - 0.9
-            cost += costs[4] * it_moved
+        cost += costs[4] * it_moved
     elif c_mode == 3:
         # hit w/ratio REWARD
         tot =  0.5 / (parameters[8] * parameters[9])
