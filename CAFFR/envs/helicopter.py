@@ -701,14 +701,18 @@ class EnvMakerForestFire(Helicopter):
             reward = (self.cell_counts[self.tree]) / tot
             reward += self.hit * 0.5  
         elif self.reward_type == 'ratio':
-            ratio = 0.0
+            if self.remaining_moves == self.moves_before_updating:
+                tot = self.grid.shape[0] * self.grid.shape[1]
+                reward = 1.8 * self.cell_counts[self.tree] / tot - 0.9#v1 17/04
+                reward += self.reward_move if self.last_move else 0.0
+            """ratio = 0.0 # v0
             if self.cell_counts[self.fire] > 0:
                 ratio = self.cell_counts[self.tree] / self.cell_counts[self.fire]
             else:
                 ratio = self.n_row*self.n_col
             reward += self.reward_tree*(ratio)
             reward += (self.hit*2.0 - self.last_move*1.0) * self.reward_hit
-            reward += self.cell_counts[self.empty] * self.reward_empty
+            reward += self.cell_counts[self.empty] * self.reward_empty"""
         else:
             raise ValueError('Unrecognized reward type')
         return reward

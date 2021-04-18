@@ -57,3 +57,38 @@ def checkDir(dir):
         print("Creating a folder {}".format(dir))
         os.mkdir(dir)
     Time.sleep(0.5)
+
+def calculateRatio(env):
+    cc = env.cell_counts
+    tot = env.n_col * env.n_row
+    return cc[env.tree] / tot
+
+def expDir(expName:str, envName:str) -> (str, str):
+    """
+        Returns the default folders for the experiment
+        with the environment name description.
+
+        returns
+        -------
+        expdir, tbdir
+    """
+    t = timeFormatedS()
+    return genDir(expName, envName, t)
+
+def genDir(*args) -> str:
+    dr = os.getenv('HOME')
+    adds = ["rl_results", *args]
+    for s in adds:
+        dr = os.path.join(dr, s)
+    os.makedirs(dr, exist_ok=True)
+    return dr
+
+def timeFormatedS() -> str:
+    #return time.strftime("%Y-%B-%d-_%H-%M-%S", time.gmtime())
+    return Time.strftime("%Y-%m-%d_%H-%M-%S", Time.gmtime())
+
+def savePickle(obj, path, name):
+    path = os.path.join(path, "{}.pyobj".format(name))
+    fileHandler = open(path, "wb")
+    pickle.dump(obj, fileHandler)
+    fileHandler.close()

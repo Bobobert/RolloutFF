@@ -11,8 +11,6 @@ from CAFFR.utils.consts import *
 from CAFFR.envs.forest_fire_cuda import helicopter_step
 from CAFFR.heuristics.heuristic_cuda import Heuristic
 
-import itertools
-
 def sampler(env,
             rg,
             h_mode=0,
@@ -138,36 +136,6 @@ def sampler(env,
     
     return minMax(trajectories, results, ACTION_SET_NB, min_obj)
 
-    """ 
-    # Past No MCTS Version
-    results = []
-    trajectories = get_leafs(ACTION_SET, lookahead)
-    d_trayectories = cuda.to_device(trajectories)
-    d_results = cuda.device_array(trajectories.shape[0], dtype=NPTFLOAT)
-                                                       
-    for _ in range(n_samples):
-        ## Making the common random numbers for the sample
-        d_throws = generateCRN(rg, env.grid, k)
-        sample_trajectories[blockspread, THREADSPREAD](d_grid, d_throws,\
-            d_probs, d_params, d_costs, d_trajectories, random_states, d_results)
-        # Retriving to host the samples results
-        results.append(d_results.copy_to_host())
-    # Applying objective
-    results = np.array(results)
-    # Finding max
-    nbActionSet = List()
-    for a in ACTION_SET:
-        nbActionSet.append(a)
-    best_action, best_cost, avg_costs_action = \
-        min_max(trajectories, results, n_samples, nbActionSet, min_obj)
-
-    # Returning to original values to action set only.
-    if not action_set is None:
-        SAMPLER_CONST['ACTION_SET'] = [1,2,3,4,5,6,7,8,9]
-        SAMPLER_CONST['L_AS'] =  9
-
-    return best_action, best_cost, avg_costs_action"""
-
 @nb.njit
 def selectTrajectories(trajectories:List, results:np.ndarray, mcts_p:float, min_obj:False):
     if mcts_p == 1.0:
@@ -267,23 +235,6 @@ def load_forest_fire_2_device(grid=None, grid_size=(20,20),
     costs_mem = cuda.to_device(costs)
 
     return grid_mem, probs_mem, params_mem, costs_mem # Pass references on device.
-
-def get_leafs(action_set,
-              depth):
-    """
-    Function that generates a list for the kernel to asign samples trajectories to the
-    device. It returns in a numpy array all the leafs of the tree with the lookahead depht
-    required.
-
-    Parameters
-    ----------
-    actions_set: list
-        All the actions possible to iterate from. Accepts other iterables.
-    depth: int
-        The lookahead wanted of the sample tree
-    """
-    leafs = [trajectory for trajectory in itertools.product(action_set,repeat=depth)]
-    return np.array(leafs, dtype=np.int8)
 
 @nb.njit
 def expandLeafs(leafs:List, action_set:List):
@@ -399,45 +350,3 @@ def minMax(trajectories: List, results: np.ndarray, action_set:List, min_obj:boo
     best_action = best_actions[np.random.randint(len(best_actions))]
     return best_action, best_cost, None
 
-@nb.jit
-def min_max(trajectories, results, n_samples, action_set, min_obj):
-    """
-    A custon function to calculate the means of the trajectories
-    given only the first action of the trajectory. Then calculates
-    the minimum.
-    """
-    l_as = len(action_set)
-    sample_avg = np.zeros(l_as, dtype=NPTFLOAT)
-    sample_c = np.ones(l_as, dtype=np.uint32)
-    for k in range(n_samples):
-        # Calculating the averages for the first action in the trajectory
-        for t, c in zip(trajectories, results[k]):
-            fa = t[0] # Getting the first action
-            for i in range(l_as):
-                if fa == action_set[i]:
-                    #Store the 
-                    s_c = sample_c[i]
-                    sample_avg[i] = sample_avg[i]*(s_c - 1) / s_c + c / s_c
-                    sample_c[i] += 1
-
-    best_action, best_cost, obj = 5, np.inf, 1
-
-    if not min_obj:
-        # Maximize
-        obj = -1
-        best_cost *= obj
-  
-    for i in range(l_as):
-        c = sample_avg[i]
-        if obj*c < obj*best_cost:
-            best_cost = c
-            best_action = action_set[i]
-        elif obj*c == obj*best_cost:
-            if np.random.random() < 0.112:
-                best_action = action_set[i]
-
-    action_avg = np.zeros((l_as,2), dtype=NPTFLOAT)
-    for i in range(l_as):
-        action_avg[i,0] = sample_avg[i]
-        action_avg[i,1] = action_set[i]
-    return best_action, best_cost, action_avg

@@ -312,8 +312,9 @@ class Experiment():
         else:
             RUN_GIF = self.RUN_GIF
         # Lists to save the results from the N_ITERS
-        RO_RESULTS, H_RESULTS = [], []
-        RO_RESULTS_C, H_RESULTS_C = [], []
+        RO_RESULTS, H_RESULTS, R_RESULTS = [], [], []
+        RO_RESULTS_C, H_RESULTS_C, R_RESULTS_C = [], [], []
+        RO_RATIO, H_RATIO, R_RATIO = [], [], []
         # Measuring time of execution. 
         self.logger("Run {} - Metadata: {}\n |".format(self.c_runs, self.metadata_str), True, True, True)
         # First loop to execute an rollout experiment.
@@ -323,19 +324,22 @@ class Experiment():
             observation_1 = observation
             #Making copy of the env to apply the heuristic
             self.env_h = self.env.copy()
+            self.env_r = self.env.copy()
             # Making checkpoints
             #checkpoint_env = self.env.make_checkpoint()
             #checkpoint_env_h = self.env_h.make_checkpoint()
             # Passing a new identical random generator
             self.env.rg = createRandomGen(self.seed)
-            self.env_h.rg = createRandomGen(self.seed)                
+            self.env_h.rg = createRandomGen(self.seed)
+            self.env_r.rg = createRandomGen(self.seed)          
             self.logger(" |-- Test : {} of {}".format(n_test+1, self.N_ITERS))
             # Making a checkpoint from the initial state generated.         
             #self.env.load_checkpoint(checkpoint_env)
             #self.env_h.load_checkpoint(checkpoint_env_h)
             # Setting up vars to store costs
-            rollout_cost, heuristic_cost = 0, 0
-            rollout_cost_step, heuristic_cost_step =[], []
+            rollout_cost, heuristic_cost, random_cost = 0, 0, 0
+            rollout_cost_step, heuristic_cost_step, random_cost_step =[], [], []
+            ro_ratio, h_ratio, r_ratio = [], [], []
             # Making the progress bar
             bar = tqdm.tqdm(range(self.env.moves_before_updating * self.N_STEPS))
             for i in bar:
@@ -358,6 +362,7 @@ class Experiment():
                 #Helicopter take an action based on Rollout strategy and heuristic
                 observation, ro_cost, _, _ = self.env.step(r_action)
                 observation_1, h_cost, _, _ = self.env_h.step(h_action)
+                _, r_cost, _, _ = self.env_r.step(np.random.randint(1, 10))
                 if RUN_GIF and (n_test == self.N_ITERS - 1):
                     # Framing just the last round
                     self.env.frame(title="Rollout step {}-th".format(i))
@@ -368,6 +373,12 @@ class Experiment():
                 #Update Heuristic Total cost
                 heuristic_cost += h_cost
                 heuristic_cost_step.append(heuristic_cost)
+                random_cost += r_cost
+                random_cost_step.append(random_cost)
+                # Register ratios
+                ro_ratio += [calculateRatio(self.env)]
+                h_ratio += [calculateRatio(self.env_h)]
+                r_ratio += [calculateRatio(self.env_r)]
                 #Generate a message
                 msg =    " |   |      |"
                 msg += "\n |   |      |-- Agent step {}".format(i)
@@ -385,9 +396,15 @@ class Experiment():
             #Costs p/test
             RO_RESULTS.append(rollout_cost)
             H_RESULTS.append(heuristic_cost)
+            R_RESULTS.append(random_cost)
             #Cumulative costs p/test
             RO_RESULTS_C.append(rollout_cost_step)
             H_RESULTS_C.append(heuristic_cost_step)
+            R_RESULTS_C.append(random_cost_step)
+            # Ratios
+            RO_RATIO += [ro_ratio]
+            H_RATIO += [h_ratio]
+            R_RATIO += [r_ratio]
         msg = " | Run {} done.".format(self.c_runs)
         msg+= "\nMetadata: {}\n |".format(self.metadata_str)
         self.logger(msg, True, True, True)
@@ -408,7 +425,13 @@ class Experiment():
             self.env_h.frames = []
             self.theres_run_gif = True
             self.make_gif(RUN=True)
-        return None
+        def createDict(scalar_accumulated, steps_accumulated, ratios):
+            return {"return":scalar_accumulated,
+            "step":steps_accumulated,
+            "ratio":ratios}
+        return {"rollout":createDict(RO_RESULTS, RO_RESULTS_C, RO_RATIO),
+                "heuristic":createDict(H_RESULTS, H_RESULTS_C, H_RATIO),
+                "random":createDict(R_RESULTS, R_RESULTS_C, R_RATIO)}
 
     def run_multiple_LH(self, LHS = [1], GRAPH=True, n_cols=2, dpi=200, save_arr=3600):
         """
