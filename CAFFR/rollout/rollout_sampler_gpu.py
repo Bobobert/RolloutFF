@@ -13,6 +13,7 @@ from CAFFR.heuristics.heuristic_cuda import Heuristic
 
 def sampler(env,
             rg,
+            trajectory = None,
             h_mode=0,
             gamma=1.0,
             n_samples = 30,
@@ -40,6 +41,8 @@ def sampler(env,
     h_mode: int
         From the heurititcs programmed in this package. Pass the mode one
         wants the heuristic to run during all the samples.
+    trajectory: numba_cuda array
+        If once created and MCTS_P == 1, it can be reused.
     gamma: float
         Disconunt value that will be applied to each step cost. This is done
         in a manner that the farther costs can have a less impact on the sample
@@ -78,6 +81,8 @@ def sampler(env,
         c_mode = 2
     elif env_cost == 'hit':
         c_mode = 3
+    elif env_cost == 'hit_ratio':
+        c_mode = 4
     # CHANGING GLOBALS VARIABLES
     # I regret this decisiont
     SAMPLER_CONST = globals()
@@ -114,15 +119,9 @@ def sampler(env,
         tree = env.tree,
         fire = env.fire,
     )
-
+    
     ACTION_SET_NB = List(ACTION_SET)
-    # Start expanding the tree
-    for l in range(lookahead):
-        if l == 0: # Create new trajectories
-            trajectories = List(List([a]) for a in ACTION_SET)
-        else: # Expand the selected trajectories with new leafs
-            trajectories = expandLeafs(trajectories, ACTION_SET_NB)
-        # Pass to device
+    def runSample(trajectories):
         d_trajectories = cuda.to_device(np.array(trajectories))
         d_results = cuda.device_array(d_trajectories.shape[0], dtype=NPTFLOAT)
         sample_results, c_samples = np.zeros(d_trajectories.shape[0], dtype=NPTFLOAT), 1 / n_samples
@@ -132,9 +131,32 @@ def sampler(env,
                                                             d_probs, d_params, d_costs, d_trajectories,
                                                             random_states, d_results)
             sample_results += d_results.copy_to_host() * c_samples
-        trajectories, results = selectTrajectories(trajectories, sample_results, mcts_p ,min_obj)
+        return trajectories, sample_results
+
+    # Start expanding the tree
+    ## base case
+    if mcts_p == 1.0:
+        if trajectory is None:
+            trajectories = List(List([a]) for a in ACTION_SET)
+            for _ in range(1, lookahead):
+                # Do all
+                trajectories = expandLeafs(trajectories, ACTION_SET_NB)
+        else:
+            trajectories = trajectory
+
+        trajectories, results = runSample(trajectories)
+        return minMax(trajectories, results, ACTION_SET_NB, min_obj), trajectories
+
+    for l in range(lookahead):
+        if l == 0: # Create new trajectories
+            trajectories = List(List([a]) for a in ACTION_SET)
+        else: # Expand the selected trajectories with new leafs
+            trajectories = expandLeafs(trajectories, ACTION_SET_NB)
+        # Pass to device
+        trajectories, results = runSample(trajectories)
+        trajectories, results = selectTrajectories(trajectories, results, mcts_p ,min_obj)
     
-    return minMax(trajectories, results, ACTION_SET_NB, min_obj)
+    return minMax(trajectories, results, ACTION_SET_NB, min_obj), None
 
 @nb.njit
 def selectTrajectories(trajectories:List, results:np.ndarray, mcts_p:float, min_obj:False):

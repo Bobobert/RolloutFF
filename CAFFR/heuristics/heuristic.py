@@ -217,7 +217,7 @@ def Heuristic(args):
         elif a=="down_right":
             action=actions[2][2]
     #If there is only one zone with max fire density (move in up,down,right,left or corners only)
-    if len(max_list) == 1 : # Chose the first in this order
+    elif len(max_list) == 1 : # Chose the first in this order
         if max_list[0]=="up_left":
             action=actions[0][0]
         elif max_list[0]=="up":

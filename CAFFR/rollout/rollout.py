@@ -27,6 +27,7 @@ from CAFFR.utils.misc import *
 def Rollout_gpu(
     env,
     rg,
+    trajectory = None,
     H:int = 0, gamma: float = 1.0, K: int = 10,
     lookahead:int = 1, N_samples:int = 10, 
     mcts_proportion: float = 1.0, 
@@ -56,6 +57,9 @@ def Rollout_gpu(
     H : int
         From the rollout_sampler_gpu.Heuristic() select a mode that has been
         programed inside that function to work in the device.
+    trajectory: numba_cuda_array
+        If available can be passed. If MCTS_P == 1.0 skips the recreation of 
+        the array.
     gamma : float
         Discount factor for the cost function.
     K : int
@@ -79,11 +83,11 @@ def Rollout_gpu(
         This function now needs an external random generator from the numpy library.
     """
 
-    best_action, best_cost, avgs = sampler(env, rg, h_mode=H, gamma=gamma, n_samples=N_samples, k=K,
+    (best_action, best_cost, avgs), trajectory = sampler(env, rg, trajectory, h_mode=H, gamma=gamma, n_samples=N_samples, k=K,
                                     lookahead=lookahead, min_obj=min_objective, seed=seed,
                                     mcts_p = mcts_proportion)
 
-    return best_action, best_cost
+    return best_action, best_cost, trajectory
 
 class Experiment():
     """
@@ -317,6 +321,7 @@ class Experiment():
         RO_RATIO, H_RATIO, R_RATIO = [], [], []
         # Measuring time of execution. 
         self.logger("Run {} - Metadata: {}\n |".format(self.c_runs, self.metadata_str), True, True, True)
+        trajectory = None
         # First loop to execute an rollout experiment.
         for n_test in range(self.N_ITERS):
              # Reseting env and storing the initial observations
@@ -324,14 +329,14 @@ class Experiment():
             observation_1 = observation
             #Making copy of the env to apply the heuristic
             self.env_h = self.env.copy()
-            self.env_r = self.env.copy()
+            env_r = self.env.copy()
             # Making checkpoints
             #checkpoint_env = self.env.make_checkpoint()
             #checkpoint_env_h = self.env_h.make_checkpoint()
             # Passing a new identical random generator
             self.env.rg = createRandomGen(self.seed)
             self.env_h.rg = createRandomGen(self.seed)
-            self.env_r.rg = createRandomGen(self.seed)          
+            env_r.rg = createRandomGen(self.seed)          
             self.logger(" |-- Test : {} of {}".format(n_test+1, self.N_ITERS))
             # Making a checkpoint from the initial state generated.         
             #self.env.load_checkpoint(checkpoint_env)
@@ -341,12 +346,13 @@ class Experiment():
             rollout_cost_step, heuristic_cost_step, random_cost_step =[], [], []
             ro_ratio, h_ratio, r_ratio = [], [], []
             # Making the progress bar
-            bar = tqdm.tqdm(range(self.env.moves_before_updating * self.N_STEPS))
+            bar = tqdm.tqdm(range((self.env.moves_before_updating + 1) * self.N_STEPS))
             for i in bar:
                 #Calls Rollout Strategy and returns action,qvalue
-                r_action, q_value = Rollout_gpu(
+                r_action, q_value, trajectory = Rollout_gpu(
                                                 self.env, 
                                                 self.rg,
+                                                trajectory=trajectory,
                                                 H=self.H_mode,
                                                 gamma=self.gamma,
                                                 epsilon=self.epsilon,
@@ -362,7 +368,7 @@ class Experiment():
                 #Helicopter take an action based on Rollout strategy and heuristic
                 observation, ro_cost, _, _ = self.env.step(r_action)
                 observation_1, h_cost, _, _ = self.env_h.step(h_action)
-                _, r_cost, _, _ = self.env_r.step(np.random.randint(1, 10))
+                _, r_cost, _, _ = env_r.step(np.random.randint(1, 10))
                 if RUN_GIF and (n_test == self.N_ITERS - 1):
                     # Framing just the last round
                     self.env.frame(title="Rollout step {}-th".format(i))
@@ -378,7 +384,7 @@ class Experiment():
                 # Register ratios
                 ro_ratio += [calculateRatio(self.env)]
                 h_ratio += [calculateRatio(self.env_h)]
-                r_ratio += [calculateRatio(self.env_r)]
+                r_ratio += [calculateRatio(env_r)]
                 #Generate a message
                 msg =    " |   |      |"
                 msg += "\n |   |      |-- Agent step {}".format(i)
