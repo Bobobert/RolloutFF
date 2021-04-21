@@ -31,7 +31,7 @@ def createRandomGen(seed):
 # then before to create any kernel
 
 # Pascal has SM with 64 or 128 units
-THREADSPREAD = 64
+THREADSPREAD = 128
 
 NPTFLOAT = np.float32
 NPTINT = np.int16

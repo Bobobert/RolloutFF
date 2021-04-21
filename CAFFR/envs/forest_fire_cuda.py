@@ -166,6 +166,11 @@ def helicopter_step(grid,
             cost += 1.8 * trees / rr - 0.9
         cost += costs[4] * it_moved
         cost += costs[3] * hits
+    elif c_mode == 5:
+        tot =  1 / (parameters[8] * parameters[9])
+        cost += trees * tot * costs[0]
+        cost += fires * tot * costs[1]
+        cost += hits * costs[3]
     # End of cost
 
     return updated_grid, new_pos_row, new_pos_col, new_steps_before_updating, cost

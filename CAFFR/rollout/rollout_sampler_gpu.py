@@ -83,6 +83,8 @@ def sampler(env,
         c_mode = 3
     elif env_cost == 'hit_ratio':
         c_mode = 4
+    elif env_cost == "hit_fire":
+        c_mode = 5
     # CHANGING GLOBALS VARIABLES
     # I regret this decisiont
     SAMPLER_CONST = globals()
@@ -122,7 +124,8 @@ def sampler(env,
     
     ACTION_SET_NB = List(ACTION_SET)
     def runSample(trajectories):
-        d_trajectories = cuda.to_device(np.array(trajectories))
+        t = np.array(trajectories)
+        d_trajectories = cuda.to_device(t)
         d_results = cuda.device_array(d_trajectories.shape[0], dtype=NPTFLOAT)
         sample_results, c_samples = np.zeros(d_trajectories.shape[0], dtype=NPTFLOAT), 1 / n_samples
         # Obtain samples
@@ -315,7 +318,7 @@ def sample_trajectories(grid,
             # Extracting CRN
             crn = crns[k]
             # Calculate action
-            if k < len(trajectory):
+            if k < trajectory.shape[0]:
                 action = trajectory[k]
             else:
                 action = Heuristic(local_grid, pos_row, pos_col, steps_to_update,
@@ -358,6 +361,7 @@ def minMax(trajectories: List, results: np.ndarray, action_set:List, min_obj:boo
         c = result_action[action_root][1]
         prev_v = result_action[action_root][0]
         result_action[action_root][0] = (prev_v * (c) + value) / (c + 1)
+        result_action[action_root][1] += 1
 
     best_actions = List()
     for i in range(len(action_set)):
