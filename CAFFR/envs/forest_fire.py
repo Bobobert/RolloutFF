@@ -9,6 +9,7 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numba
 
 class ForestFire():
     """
@@ -158,11 +159,11 @@ class ForestFire():
     color_rock = np.array([179, 139, 109, alpha]) # Brown RGBA
     color_lake = np.array([131, 174, 255, alpha]) # Blue RGBA
     # Grid Defualt Initialization Probabilities
-    def_init_stoch = {'ip_tree':0.75, 'ip_empty':0.25, 'ip_fire':0.0, 'ip_rock':0.0, 'ip_lake':0.0}
+    def_init_stoch = {'ip_tree':0.55, 'ip_empty':0.45, 'ip_fire':0.0, 'ip_rock':0.0, 'ip_lake':0.0}
     def_init_determ = {'ip_tree':0.59, 'ip_empty':0.0, 'ip_fire':0.01, 'ip_rock':0.40, 'ip_lake':0.0}
     def __init__(self, n_row = 16, n_col = 16, p_tree=0.100, p_fire=0.001, forest_mode = 'stochastic',
                  custom_grid=None, force_fire = True, boundary='invariant',
-                 tree = '|', empty = '.', fire = '*', rock = '#', lake = 'O',
+                 tree = 1, empty = 0, fire = 2, rock = 5, lake = 7,
                  ip_tree = None, ip_empty = None, ip_fire = None, ip_rock = None, ip_lake = None,
                  is_copy=False): 
         
@@ -195,24 +196,9 @@ class ForestFire():
             self.grid_init()
         else:
             self.grid = None
-    def render(self):
-        raise NotImplementedError
-        
-    def simulate(self, times=10, delay=0.7):
-        """ Computes n steps of the Automaton"""
-        i = 0
-        print(f'{i}.', end='')
-        self.render()
-        while i < times:
-            i += 1
-            try:
-                self.update()
-            except StopIteration:
-                break
-            self.render()
-            print(f'{i}.', end='')
-            time.sleep(delay)
-        print('\nEnd of the Simulation')
+
+        self.last_update = False
+
     def update(self):
         if self.forest_mode == 'stochastic':
             self.update_stochastic()
@@ -221,6 +207,7 @@ class ForestFire():
         else:
             raise Exception('Mode Invalid: Try "stochastic"|"deterministic"')
         return self.grid
+
     def fire_around(self, grid, row, col, boundary = 'invariant'):
         """ Checks for fire in the neighborhood of grid[row][col]"""
         if boundary == 'invariant':
@@ -237,40 +224,46 @@ class ForestFire():
                 burning_near = True
                 break
         return burning_near
-        
+
+    
+    @staticmethod
+    @numba.njit
+    def updateSto(grid:np.ndarray, throws:np.ndarray, pFire: float, pTree: float, 
+                    fire:int, tree:int, empty:int):
+        rows, cols = grid.shape
+        newGrid = np.zeros(grid.shape, dtype=np.uint8)
+        for row in range(rows):
+            for col in range(cols):
+                fireArround, val = False, empty
+                # Fire Around for Invariant Only
+                for iRow in range(max(0,row - 1), min(rows, row+2)):
+                    for iCol in range(max(0,col - 1), min(cols, col+2)):
+                        if (iRow != row or iCol != col) and (grid[iRow, iCol] == fire):
+                            fireArround = True
+                
+                if (grid[row,col] == tree):
+                    if fireArround or (pFire > throws[row, col]):
+                        # Burn tree to the ground
+                        # Roll a dice for a lightning strike
+                        val = fire
+                    else:
+                        val = tree
+                elif (grid[row, col] == empty) and (pTree > throws[row, col]):
+                    # Roll a dice for a growing bush
+                    val = tree
+                elif grid[row, col] == fire:
+                    # Consume fire
+                    val = empty
+                newGrid[row, col] = val
+
+        return newGrid
+    
     def update_stochastic(self, grid=None, p_tree=None, p_fire=None):
         """ Updates the grid according with Drossel and Schwabl (1992) rules"""
-        if grid is None:
-            grid = self.grid
-        if p_tree is None:
-            p_tree = self.p_tree
-        if p_fire is None:
-            p_fire = self.p_fire
-        n_row = grid.shape[0]
-        n_col = grid.shape[1]
-        new_grid = grid.copy()
-        throws = self.rg.random(size=self.grid.shape) #RWH
-        for row in range(n_row):
-            for col in range(n_col):
-                if grid[row][col] == self.tree and self.fire_around(grid, row, col, self.boundary):
-                    # Burn tree to the ground
-                    new_grid[row][col] = self.fire
-                elif grid[row][col] == self.tree:
-                    # Roll a dice for a lightning strike
-                    if throws[row][col] <= self.p_fire:
-                       new_grid[row][col] = self.fire 
-                elif grid[row][col] == self.empty:
-                    # Roll a dice for a growing bush
-                    if throws[row][col] <= self.p_tree:
-                       new_grid[row][col] = self.tree
-                elif grid[row][col] == self.fire:
-                    # Consume fire
-                    new_grid[row][col] = self.empty
-                else:
-                    # Do nothing with Rocks and Lakes
-                    pass
-        self.grid = new_grid
-        return new_grid
+        throws = self.rg.uniform(size=self.grid.shape) #RWH
+        self.grid = self.updateSto(np.copy(self.grid), throws, self.p_fire, self.p_tree,
+                        self.fire, self.tree, self.empty)
+        return self.grid
 
     def is_fire_over(self):
         for row in range(self.n_row):
@@ -279,7 +272,6 @@ class ForestFire():
                     return False
         return True
 
-    last_update = False
     def update_deterministic(self):
         """Just updates using the burning rule"""
         grid = self.grid
@@ -323,10 +315,12 @@ class ForestFire():
                 self.grid_add_1_fire()
         else:
             raise ValueError('Mode Invalid: Try "stochastic"|"deterministic"')
+
     def grid_add_1_fire(self):
         forced_row = self.rg.choice(np.arange(self.n_row))
         forced_col = self.rg.choice(np.arange(self.n_col))
         self.grid[forced_row][forced_col] = self.fire    
+
     def grid_random(self, ip_tree=None, ip_empty=None, ip_fire=None, ip_rock=None, ip_lake=None):
         included_for_sharing = list()
         if ip_tree is None: ip_tree = 0.0; included_for_sharing.append(0)
@@ -345,7 +339,8 @@ class ForestFire():
         grid = self.rg.choice(cells, size=self.n_row*self.n_col, p=init_probs).\
                     reshape(self.n_row,self.n_col)
         self.init_probabilities = dict(zip(('tree', 'empty', 'fire', 'rock', 'lake'), init_probs))
-        return grid
+        return grid.astype(np.uint8)
+
     def grid_init_manually(self, grid):
         everything_good = np.all(np.logical_or.reduce((grid == self.tree,
                                                     grid == self.empty,
@@ -357,10 +352,12 @@ class ForestFire():
         self.n_row = grid.shape[0]
         self.n_col = grid.shape[1]
         self.grid = grid
+
     def grid_to_rgba(self):
-        rgba_mat = self.grid.tolist()
-        for row in range(self.n_row):
-            for col in range(self.n_col):
+        rgba_mat = np.copy(self.grid).tolist()
+        n_row, n_col = self.grid.shape
+        for row in range(n_row):
+            for col in range(n_col):
                 if rgba_mat[row][col] == self.tree:
                     rgba_mat[row][col] = self.color_tree
                 elif rgba_mat[row][col] == self.empty:
@@ -372,9 +369,12 @@ class ForestFire():
                 elif rgba_mat[row][col] == self.lake:
                     rgba_mat[row][col] = self.color_lake
                 else:
+                    ax = rgba_mat[row,col]
+                    print(ax, type(ax), self.tree, type(self.tree))
                     raise ValueError('Error: Unidentified cell')
         rgba_mat = np.array(rgba_mat)
         return rgba_mat
+
     def is_bound_legal(self, row, col, grid=None):
         """Check borders of a target cell"""
         if grid is None:
@@ -388,6 +388,7 @@ class ForestFire():
         left = c_offset[0] >= 0
         right = c_offset[1] <= n_col-1
         return {'up': up, 'down': down, 'left': left, 'right': right}
+        
     def neighborhood_invariant(self, grid, row, col):
         """Invariant Boundary Conditions"""
         n_row = grid.shape[0]
@@ -470,3 +471,10 @@ class ForestFire():
             middle_left + middle_right +\
             down_left + down_center + down_right
         return neighborhood
+
+    def observation_grid(self):
+        raise NotImplementedError
+
+    def seed(self, s):
+        self.rg = np.random.Generator(np.random.SFC64(s))
+        return [s]

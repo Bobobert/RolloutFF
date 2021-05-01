@@ -127,10 +127,12 @@ def sampler(env,
         t = np.array(trajectories)
         d_trajectories = cuda.to_device(t)
         d_results = cuda.device_array(d_trajectories.shape[0], dtype=NPTFLOAT)
+        d_crn = cuda.device_array([k, *env.grid.shape], dtype = NPTFLOAT)
         sample_results, c_samples = np.zeros(d_trajectories.shape[0], dtype=NPTFLOAT), 1 / n_samples
         # Obtain samples
         for _ in range(n_samples):
-            sample_trajectories[blockspread, THREADSPREAD](d_grid, generateCRN(rg, env.grid, k),
+            gen_crn[blockspread, THREADSPREAD](random_states, d_crn) # New generation 
+            sample_trajectories[blockspread, THREADSPREAD](d_grid, d_crn,#generateCRN(rg, env.grid, k),
                                                             d_probs, d_params, d_costs, d_trajectories,
                                                             random_states, d_results)
             sample_results += d_results.copy_to_host() * c_samples
@@ -182,6 +184,7 @@ def generateCRN(rg, grid, budget):
     throws = rg.uniform(size = [budget, *grid.shape])
     throws = throws.astype(NPTFLOAT)
     return cuda.to_device(throws)
+
 
 def load_forest_fire_2_device(grid=None, grid_size=(20,20),
                             ip_tree=0.5, p_fire=0.001, p_tree=0.005,
@@ -271,6 +274,15 @@ def expandLeafs(leafs:List, action_set:List):
                 new_leaf.append(action)
                 new_leafs.append(new_leaf)
     return new_leafs
+
+@cuda.jit
+def gen_crn(random_state, target):
+    worker = cuda.grid(1)
+    if worker < target.shape[0]: # A worker to gen each step
+        r, c = target.shape[1], target.shape[2]
+        for i in range(r):
+            for j in range(c):
+                target[worker, i, j] = rdm_uniform_sample(random_state, worker)
 
 @cuda.jit
 def sample_trajectories(grid,
