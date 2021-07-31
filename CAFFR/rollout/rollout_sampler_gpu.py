@@ -375,13 +375,13 @@ def minMax(trajectories: List, results: np.ndarray, action_set:List, min_obj:boo
         result_action[action_root][0] = (prev_v * (c) + value) / (c + 1)
         result_action[action_root][1] += 1
 
-    best_actions = List()
+    #best_actions = List()
     for i in range(len(action_set)):
         c = result_action[i][0]
         if obj*c < obj*best_cost:
             best_cost = c
-            best_actions = List()
-            best_actions.append(i + 1)
+            #best_actions = List()
+            best_actions = List([i + 1])
         elif obj*c == obj*best_cost:
             best_actions.append(i + 1)
             

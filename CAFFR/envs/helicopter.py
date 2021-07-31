@@ -130,7 +130,7 @@ class Helicopter(ForestFire):
             # Main Plot
             if show and wait_time > 0:
                 plt.ion()
-            fig = plt.imshow(self.grid_to_rgba(), aspect='equal', animated=False)
+            fig = plt.imshow(self.grid_to_rgba(), aspect='equal', )
             # Title showing Reward by default
             if title ==  '':
                 plt.title('Reward {}'.format(self.reward))
@@ -143,8 +143,8 @@ class Helicopter(ForestFire):
             ax.set_xticks(np.arange(0, self.n_col, 1))
             ax.set_yticks(np.arange(0, self.n_row, 1))
             # Labels for major ticks
-            ax.set_xticklabels(np.arange(0, self.n_col, 1))#, **self.axes_font)
-            ax.set_yticklabels(np.arange(0, self.n_row, 1))#, **self.axes_font)
+            #ax.set_xticklabels(np.arange(0, self.n_col, 1))#, **self.axes_font)
+            #ax.set_yticklabels(np.arange(0, self.n_row, 1))#, **self.axes_font)
             # Minor ticks
             ax.set_xticks(np.arange(-.5, self.n_col, 1), minor=True)
             ax.set_yticks(np.arange(-.5, self.n_row, 1), minor=True)
@@ -156,6 +156,7 @@ class Helicopter(ForestFire):
             marker_style = dict(color='0.7', marker='P',
                         markersize=12, markerfacecolor='0.2')
             ax.plot(self.pos_col, self.pos_row, **marker_style)
+            plt.axis("off")
             fig = plt.gcf()
             if show:
                 if wait_time > 0:
